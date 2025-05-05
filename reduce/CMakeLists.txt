@@ -31,3 +31,8 @@ target_link_libraries(reduce_v4_thread_coarsening_B PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v5_unroll_last_warp reduce_v5_unroll_last_warp.cu)
+target_link_libraries(reduce_v5_unroll_last_warp PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
