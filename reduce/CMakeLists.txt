@@ -9,5 +9,10 @@ add_executable(reduce_v1_shared_memory reduce_v1_shared_memory.cu)
 target_link_libraries(reduce_v1_shared_memory PRIVATE 
     CUDA::cudart 
     CUDA::cublas
-    #${CUDA_cublas_LIBRARY}
+
+    )
+add_executable(reduce_v2_no_divergence_branch reduce_v2_no_divergence_branch.cu)
+target_link_libraries(reduce_v2_no_divergence_branch PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
     )

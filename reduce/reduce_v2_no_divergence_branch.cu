@@ -4,15 +4,16 @@
 
 #define THREAD_PER_BLOCK 256
 
-__global__ void reduce1(float *d_input,float *d_output){
+__global__ void reduce2(float *d_input,float *d_output){
     __shared__ float s_input[THREAD_PER_BLOCK];
     float* input_begin = d_input+blockIdx.x*blockDim.x;
 
     s_input[threadIdx.x] = input_begin[threadIdx.x];
     __syncthreads();
-    for(int i =1;i<blockDim.x;i*=2){
-        if(threadIdx.x%(i*2) == 0){
-            s_input[threadIdx.x] += s_input[threadIdx.x+i];
+    for(int i = 1;i < blockDim.x;i *= 2){
+        int index = threadIdx.x * i * 2;
+        if(index < blockDim.x){
+            s_input[index] += s_input[index + i];
         }
         __syncthreads();
     }
@@ -64,7 +65,7 @@ int main(){
     cudaMemcpy(d_input,input,N*sizeof(float),cudaMemcpyHostToDevice);
     dim3 Grid(N/THREAD_PER_BLOCK,1);
     dim3 Block(THREAD_PER_BLOCK,1);
-    reduce1<<<Grid,Block>>>(d_input,d_output);
+    reduce2<<<Grid,Block>>>(d_input,d_output);
     cudaMemcpy(output,d_output,(N/THREAD_PER_BLOCK) *sizeof(float),cudaMemcpyDeviceToHost);
     cudaError_t err = cudaGetLastError();
     if(err !=cudaSuccess){
