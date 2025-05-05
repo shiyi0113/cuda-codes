@@ -16,3 +16,8 @@ target_link_libraries(reduce_v2_no_divergence_branch PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v3_no_bank_conflict reduce_v3_no_bank_conflict.cu)
+target_link_libraries(reduce_v3_no_bank_conflict PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
