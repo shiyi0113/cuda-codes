@@ -26,3 +26,8 @@ target_link_libraries(reduce_v4_thread_coarsening_A PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v4_thread_coarsening_B reduce_v4_thread_coarsening_B.cu)
+target_link_libraries(reduce_v4_thread_coarsening_B PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
