@@ -21,3 +21,8 @@ target_link_libraries(reduce_v3_no_bank_conflict PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v4_thread_coarsening_A reduce_v4_thread_coarsening_A.cu)
+target_link_libraries(reduce_v4_thread_coarsening_A PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
