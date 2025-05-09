@@ -45,3 +45,8 @@ target_link_libraries(reduce_v7_multi_add PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v8_warp_shuffle reduce_v8_warp_shuffle.cu)
+target_link_libraries(reduce_v8_warp_shuffle PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )

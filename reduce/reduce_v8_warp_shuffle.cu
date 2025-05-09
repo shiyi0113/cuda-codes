@@ -4,19 +4,18 @@
 
 #define THREAD_PER_BLOCK 256
 
-template<unsigned int BLOCKSIZE>
 __device__ void warpReduce(volatile float* cache, unsigned int tid){
-    if (BLOCKSIZE >= 64)cache[tid]+=cache[tid+32];
-    if (BLOCKSIZE >= 32)cache[tid]+=cache[tid+16];
-    if (BLOCKSIZE >= 16)cache[tid]+=cache[tid+8];
-    if (BLOCKSIZE >= 8)cache[tid]+=cache[tid+4];
-    if (BLOCKSIZE >= 4)cache[tid]+=cache[tid+2];
-    if (BLOCKSIZE >= 2)cache[tid]+=cache[tid+1];
+    if (THREAD_PER_BLOCK >= 64)cache[tid]+=cache[tid+32];
+    if (THREAD_PER_BLOCK >= 32)cache[tid]+=cache[tid+16];
+    if (THREAD_PER_BLOCK >= 16)cache[tid]+=cache[tid+8];
+    if (THREAD_PER_BLOCK >= 8)cache[tid]+=cache[tid+4];
+    if (THREAD_PER_BLOCK >= 4)cache[tid]+=cache[tid+2];
+    if (THREAD_PER_BLOCK >= 2)cache[tid]+=cache[tid+1];
 }
 
 // each block proceses twice the amount of data.
 template<unsigned int BLOCKSIZE,unsigned int NUM_PER_BLOCK,unsigned int NUM_PER_THREAD>
-__global__ void reduce7(float *d_input,float *d_output){
+__global__ void reduce8(float *d_input,float *d_output){
     __shared__ float s_input[BLOCKSIZE];
     float* input_begin = d_input+blockIdx.x *NUM_PER_BLOCK;
     s_input[threadIdx.x] = 0;
@@ -43,7 +42,7 @@ __global__ void reduce7(float *d_input,float *d_output){
         } 
         __syncthreads(); 
     }
-    if (threadIdx.x < 32) warpReduce<BLOCKSIZE>(s_input, threadIdx.x);
+    if (threadIdx.x < 32) warpReduce(s_input, threadIdx.x);
     if(threadIdx.x == 0){
         d_output[blockIdx.x] = s_input[0];
     }
@@ -94,7 +93,7 @@ int main(){
     cudaMemcpy(d_input,input,N*sizeof(float),cudaMemcpyHostToDevice);
     dim3 Grid(block_num,1);
     dim3 Block(THREAD_PER_BLOCK,1);
-    reduce7<THREAD_PER_BLOCK,NUM_PER_BLOCK,NUM_PER_THREAD><<<Grid,Block>>>(d_input,d_output);
+    reduce8<THREAD_PER_BLOCK,NUM_PER_BLOCK,NUM_PER_THREAD><<<Grid,Block>>>(d_input,d_output);
     cudaMemcpy(output,d_output,block_num *sizeof(float),cudaMemcpyDeviceToHost);
 
     cudaError_t err = cudaGetLastError();
