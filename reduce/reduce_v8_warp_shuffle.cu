@@ -3,48 +3,43 @@
 #include <device_launch_parameters.h>
 
 #define THREAD_PER_BLOCK 256
+#define WARP_SIZE 32
 
-__device__ void warpReduce(volatile float* cache, unsigned int tid){
-    if (THREAD_PER_BLOCK >= 64)cache[tid]+=cache[tid+32];
-    if (THREAD_PER_BLOCK >= 32)cache[tid]+=cache[tid+16];
-    if (THREAD_PER_BLOCK >= 16)cache[tid]+=cache[tid+8];
-    if (THREAD_PER_BLOCK >= 8)cache[tid]+=cache[tid+4];
-    if (THREAD_PER_BLOCK >= 4)cache[tid]+=cache[tid+2];
-    if (THREAD_PER_BLOCK >= 2)cache[tid]+=cache[tid+1];
+template<unsigned int BLOCKSIZE>
+__device__ __forceinline__ float warpReduceSum(float sum){
+    sum += __shfl_down_sync(0xffffffff,sum,16);
+    sum += __shfl_down_sync(0xffffffff,sum,8);
+    sum += __shfl_down_sync(0xffffffff,sum,4);
+    sum += __shfl_down_sync(0xffffffff,sum,2);
+    sum += __shfl_down_sync(0xffffffff,sum,1);
+    return sum;
 }
 
 // each block proceses twice the amount of data.
 template<unsigned int BLOCKSIZE,unsigned int NUM_PER_BLOCK,unsigned int NUM_PER_THREAD>
 __global__ void reduce8(float *d_input,float *d_output){
-    __shared__ float s_input[BLOCKSIZE];
+    float sum = 0.0f;
     float* input_begin = d_input+blockIdx.x *NUM_PER_BLOCK;
-    s_input[threadIdx.x] = 0;
     for(int i=0;i<NUM_PER_THREAD;i++){
-        s_input[threadIdx.x] += input_begin[threadIdx.x + blockDim.x * i];
+        sum += input_begin[threadIdx.x + blockDim.x * i];
+    }
+    sum = warpReduceSum<BLOCKSIZE>(sum);
+
+    __shared__ float warpLevelSum[WARP_SIZE];
+    const int warpId = threadIdx.x / WARP_SIZE;
+    const int laneId = threadIdx.x % WARP_SIZE;
+    if(laneId == 0){
+        warpLevelSum[warpId] = sum;
     }
     __syncthreads();
-    
-    if (BLOCKSIZE >= 512) {
-        if (threadIdx.x < 256) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 256]; 
-        } 
-        __syncthreads(); 
+
+    if(warpId == 0){
+        sum = (laneId < blockDim.x / WARP_SIZE) ? warpLevelSum[laneId] : 0.0f;
+        sum = warpReduceSum<BLOCKSIZE>(sum);
     }
-    if (BLOCKSIZE >= 256) {
-        if (threadIdx.x < 128) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 128]; 
-        } 
-        __syncthreads(); 
-    }
-    if (BLOCKSIZE >= 128) {
-        if (threadIdx.x < 64) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 64]; 
-        } 
-        __syncthreads(); 
-    }
-    if (threadIdx.x < 32) warpReduce(s_input, threadIdx.x);
+
     if(threadIdx.x == 0){
-        d_output[blockIdx.x] = s_input[0];
+        d_output[blockIdx.x] = sum;
     }
 }
 
