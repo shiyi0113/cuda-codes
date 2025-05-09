@@ -40,3 +40,8 @@ target_link_libraries(reduce_v6_completely_unroll PRIVATE
     CUDA::cudart 
     CUDA::cublas
     )
+add_executable(reduce_v7_multi_add reduce_v7_multi_add.cu)
+target_link_libraries(reduce_v7_multi_add PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
