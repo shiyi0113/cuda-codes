@@ -46,18 +46,25 @@ void cpu_sgemm(float* A,float* B,float* C,const int M,const int N,const int K){
         }
     }
 }
-__global__ void sgemm_globalMemory(float* d_A,float* d_B,float* d_C,const int M,const int N,const int K){
+template<int BLOCK>
+__global__ void sgemm_sharedMemory(float* d_A,float* d_B,float* d_C,const int M,const int N,const int K){
+    __shared__ float s_A[BLOCK][BLOCK];
+    __shared__ float s_B[BLOCK][BLOCK];
+    float r_C = 0.0f;
     float* A_begin = d_A + blockIdx.x * blockDim.x * K;
     float* B_begin = d_B + blockIdx.y * blockDim.y;
-
     const int C_m = threadIdx.x + blockIdx.x * blockDim.x;
     const int C_n = threadIdx.y + blockIdx.y * blockDim.y;
 
-    float sum = 0.0f;
-    for(int k = 0;k < K;k++){
-        sum += A_begin[threadIdx.x * K + k]*B_begin[k*N+ threadIdx.y];
+    for(size_t step = 0;step < (K + BLOCK - 1)/BLOCK;step++){
+        s_A[threadIdx.x][threadIdx.y] = A_begin[threadIdx.x*K + threadIdx.y + step*BLOCK];
+        s_B[threadIdx.x][threadIdx.y] = B_begin[(threadIdx.x + step*BLOCK)*N + threadIdx.y];
+        __syncthreads();
+        for(int i=0;i < BLOCK && (step * BLOCK + i) < K;i++)
+            r_C += s_A[threadIdx.x][i] * s_B[i][threadIdx.y];
+        __syncthreads();
     }
-    d_C[C_m*N + C_n] = sum;
+    d_C[C_m*N + C_n] = r_C;
 }
 
 int main(){
@@ -92,7 +99,7 @@ int main(){
     const int BLOCK = 16;
     dim3 Grid((M+BLOCK-1)/BLOCK,(N+BLOCK-1)/BLOCK);
     dim3 Block(BLOCK,BLOCK);
-    sgemm_globalMemory<<<Grid,Block>>>(d_matrix_A,d_matrix_B,d_matrix_C,M,N,K);
+    sgemm_sharedMemory<BLOCK><<<Grid,Block>>>(d_matrix_A,d_matrix_B,d_matrix_C,M,N,K);
     cudaMemcpy(h_matrix_C,d_matrix_C,mem_size_C,cudaMemcpyDeviceToHost);
     cudaError_t err = cudaGetLastError();
     if(err !=cudaSuccess){
