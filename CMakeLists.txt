@@ -5,3 +5,5 @@ project(cuda_notes VERSION 0.1.0 LANGUAGES CUDA CXX C)
 find_package(CUDAToolkit REQUIRED)
 
 add_subdirectory(reduce)
+add_subdirectory(ncuTest)
+add_subdirectory(Sgemm)
