@@ -24,3 +24,12 @@ target_link_libraries(sgemm_v2_thread_coarsening PRIVATE
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(sgemm_v2_thread_coarsening PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
 endif()
+
+add_executable(sgemm_v3_using_float4 sgemm_v3_using_float4.cu)
+target_link_libraries(sgemm_v3_using_float4 PRIVATE 
+    CUDA::cudart 
+    CUDA::cublas
+    )
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(sgemm_v3_using_float4 PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
+endif()
