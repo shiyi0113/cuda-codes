@@ -46,25 +46,48 @@ void cpu_sgemm(float* A,float* B,float* C,const int M,const int N,const int K){
         }
     }
 }
-template<int BLOCK>
-__global__ void sgemm_sharedMemory(float* d_A,float* d_B,float* d_C,const int M,const int N,const int K){
-    __shared__ float s_A[BLOCK][BLOCK];
-    __shared__ float s_B[BLOCK][BLOCK];
-    float r_C = 0.0f;
-    float* A_begin = d_A + blockIdx.x * blockDim.x * K;
-    float* B_begin = d_B + blockIdx.y * blockDim.y;
-    const int C_m = threadIdx.x + blockIdx.x * blockDim.x;
-    const int C_n = threadIdx.y + blockIdx.y * blockDim.y;
 
-    for(size_t step = 0;step < (K + BLOCK - 1)/BLOCK;step++){
-        s_A[threadIdx.x][threadIdx.y] = A_begin[threadIdx.x*K + threadIdx.y + step*BLOCK];
-        s_B[threadIdx.x][threadIdx.y] = B_begin[(threadIdx.x + step*BLOCK)*N + threadIdx.y];
+template<unsigned int BLOCK,unsigned int COARSEFACTOR>
+__global__ void sgemm_threadCoarsening(float* d_A,float* d_B,float* d_C,const int M,const int N,const int K){
+    constexpr int BLOCKNUM = BLOCK * COARSEFACTOR;
+    __shared__ float s_A[BLOCKNUM][BLOCKNUM];
+    __shared__ float s_B[BLOCKNUM][BLOCKNUM];
+    float r_C[COARSEFACTOR][COARSEFACTOR];
+    for(int i = 0;i < COARSEFACTOR;i++){
+        for(int j = 0;j < COARSEFACTOR;j++){
+            r_C[i][j] = 0.0f;
+        }
+    }
+    float* A_begin = d_A + blockIdx.x * BLOCKNUM * K;
+    float* B_begin = d_B + blockIdx.y * BLOCKNUM;
+    const int C_m = blockIdx.x * BLOCKNUM + threadIdx.x;
+    const int C_n = blockIdx.y * BLOCKNUM + threadIdx.y;
+
+    for(size_t step = 0;step < (K + BLOCKNUM - 1)/BLOCKNUM;step++){
+        for(int i = 0;i < COARSEFACTOR;i++){
+            for(int j = 0;j < COARSEFACTOR;j++){
+                int tx = threadIdx.x + i * BLOCK;
+                int ty = threadIdx.y + j * BLOCK;
+                s_A[tx][ty] = A_begin[tx * K + ty + step*BLOCKNUM];
+                s_B[tx][ty] = B_begin[(tx + step*BLOCKNUM)*N + ty];
+            }
+        }
         __syncthreads();
-        for(int i = 0;i < BLOCK;i++)
-            r_C += s_A[threadIdx.x][i] * s_B[i][threadIdx.y];
+        for(int i = 0;i < COARSEFACTOR;i++){
+            for(int j = 0;j < COARSEFACTOR;j++){
+                int tx = threadIdx.x + i * BLOCKNUM/2;
+                int ty = threadIdx.y + j * BLOCKNUM/2;
+                for(int k = 0;k < BLOCKNUM;k++)
+                    r_C[i][j] += s_A[tx][k] * s_B[k][ty];
+            }
+        }
         __syncthreads();
     }
-    d_C[C_m*N + C_n] = r_C;
+    for(int i = 0;i < COARSEFACTOR;i++){
+        for(int j = 0;j < COARSEFACTOR;j++){
+            d_C[(C_m + i * BLOCK) * N + C_n + j * BLOCK] = r_C[i][j];
+        }
+    }
 }
 
 int main(){
@@ -97,9 +120,10 @@ int main(){
     cudaMemcpy(d_matrix_B,h_matrix_B,mem_size_B,cudaMemcpyHostToDevice);
 
     const int BLOCK = 16;
-    dim3 Grid((M+BLOCK-1)/BLOCK,(N+BLOCK-1)/BLOCK);
+    const int COARSEFACTOR = 2;
+    dim3 Grid((M+BLOCK-1)/BLOCK/COARSEFACTOR,(N+BLOCK-1)/BLOCK/COARSEFACTOR);
     dim3 Block(BLOCK,BLOCK);
-    sgemm_sharedMemory<BLOCK><<<Grid,Block>>>(d_matrix_A,d_matrix_B,d_matrix_C,M,N,K);
+    sgemm_threadCoarsening<BLOCK,COARSEFACTOR><<<Grid,Block>>>(d_matrix_A,d_matrix_B,d_matrix_C,M,N,K);
     cudaMemcpy(h_matrix_C,d_matrix_C,mem_size_C,cudaMemcpyDeviceToHost);
     cudaError_t err = cudaGetLastError();
     if(err !=cudaSuccess){
