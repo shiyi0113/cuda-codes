@@ -24,7 +24,10 @@ CUDA-Codes aims to deepen understanding of GPU parallel computing principles and
 ### In Progress
 
 - **SGEMM (Single Precision General Matrix Multiplication) Optimization**:
-  - Naive matrix multiplication CUDA implementation
+  - Basic implementation
+  - Shared memory optimization
+  - Thread coarsening techniques
+  - Using float4
 
 ## References
 
