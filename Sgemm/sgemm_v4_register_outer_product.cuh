@@ -5,7 +5,7 @@
 
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 template <unsigned int BLOCK, unsigned int COARSENINGFACTOR>
-__global__ void sgemm_usingFloat4_kernel(float *d_A, float *d_B, float *d_C, const int M, const int N, const int K)
+__global__ void sgemm_registerOuter_kernel(float *d_A, float *d_B, float *d_C, const int M, const int N, const int K)
 {
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
@@ -15,40 +15,45 @@ __global__ void sgemm_usingFloat4_kernel(float *d_A, float *d_B, float *d_C, con
     __shared__ float s_B[BLOCKNUM][BLOCKNUM];
     float *A_begin = d_A + blockIdx.x * BLOCKNUM * K;
     float *B_begin = d_B + blockIdx.y * BLOCKNUM;
-    float sum[NUM_PER_THREAD] = {0.0f};
+    float sum[COARSENINGFACTOR][COARSENINGFACTOR] = {0.0f};
+    float reg_A[COARSENINGFACTOR] = {0.0f};
+    float reg_B[COARSENINGFACTOR] = {0.0f};
+    const int tid = ty * blockDim.x + tx;
+    const int ntx = tid / 16;
+    const int nty = tid % 16;
     for (int step = 0; step < (K + BLOCKNUM - 1) / BLOCKNUM; step++)
     {
-        /*
-        s_A[tx][ty * NUM_PER_THREAD] = A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM];
-        s_A[tx][ty * NUM_PER_THREAD + 1] = A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM + 1];
-        s_A[tx][ty * NUM_PER_THREAD + 2] = A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM + 2];
-        s_A[tx][ty * NUM_PER_THREAD + 3] = A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM + 3];
-        s_B[tx][ty * NUM_PER_THREAD] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD];
-        s_B[tx][ty * NUM_PER_THREAD + 1] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD + 1];
-        s_B[tx][ty * NUM_PER_THREAD + 2] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD + 2];
-        s_B[tx][ty * NUM_PER_THREAD + 3] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD + 3];
-        */
-       FETCH_FLOAT4(s_A[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM]);
-       FETCH_FLOAT4(s_B[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD]);
+        FETCH_FLOAT4(s_A[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM]);
+        FETCH_FLOAT4(s_B[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD]);
         __syncthreads();
-        for (int i = 0; i < NUM_PER_THREAD; i++)
+        for (int k = 0; k < BLOCKNUM; k++)
         {
-            for (int k = 0; k < BLOCKNUM; k++)
+            for (int i = 0; i < COARSENINGFACTOR; i++)
             {
-                sum[i] += s_A[tx][k] * s_B[k][ty * NUM_PER_THREAD + i];
+                reg_A[i] = s_A[ntx * COARSENINGFACTOR + i][k];
+                reg_B[i] = s_B[k][nty * COARSENINGFACTOR + i];
+            }
+            for (int i = 0; i < COARSENINGFACTOR; i++)
+            {
+                for (int j = 0; j < COARSENINGFACTOR; j++)
+                {
+                    sum[i][j] += reg_A[i] * reg_B[j];
+                }
             }
         }
         __syncthreads();
     }
-    const int C_m = blockIdx.x * BLOCKNUM + threadIdx.x;
-    const int C_n = blockIdx.y * BLOCKNUM + threadIdx.y * NUM_PER_THREAD;
-    for (int i = 0; i < NUM_PER_THREAD; i++)
+    float *C_begin = d_C + blockIdx.x * BLOCKNUM * N + blockIdx.y * BLOCKNUM;
+    for (int i = 0; i < COARSENINGFACTOR; i++)
     {
-        d_C[C_m * N + C_n + i] = sum[i];
+        for (int j = 0; j < COARSENINGFACTOR; j++)
+        {
+            C_begin[(ntx * COARSENINGFACTOR + i) * N + nty * COARSENINGFACTOR + j] = sum[i][j];
+        }
     }
 }
 
-void sgemm_usingFloat4(float *h_A, float *h_B, float *h_C, const int M, const int N, const int K)
+void sgemm_registerOuter(float *h_A, float *h_B, float *h_C, const int M, const int N, const int K)
 {
     const size_t mem_size_A = M * K * sizeof(float);
     const size_t mem_size_B = K * N * sizeof(float);
@@ -61,11 +66,12 @@ void sgemm_usingFloat4(float *h_A, float *h_B, float *h_C, const int M, const in
     cudaMemcpy(d_matrix_A, h_A, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(d_matrix_B, h_B, mem_size_B, cudaMemcpyHostToDevice);
     cudaMemset(d_matrix_C,0,mem_size_C);
+
     const int BLOCK = 16;
     const int COARSENINGFACTOR = 2;
     dim3 Grid((M + (BLOCK * COARSENINGFACTOR) - 1) / (BLOCK * COARSENINGFACTOR), (N + (BLOCK * COARSENINGFACTOR) - 1) / (BLOCK * COARSENINGFACTOR));
     dim3 Block(BLOCK * COARSENINGFACTOR, BLOCK / COARSENINGFACTOR);
-    sgemm_usingFloat4_kernel<BLOCK, COARSENINGFACTOR><<<Grid, Block>>>(d_matrix_A, d_matrix_B, d_matrix_C, M, N, K);
+    sgemm_registerOuter_kernel<BLOCK, COARSENINGFACTOR><<<Grid, Block>>>(d_matrix_A, d_matrix_B, d_matrix_C, M, N, K);
     cudaMemcpy(h_C, d_matrix_C, mem_size_C, cudaMemcpyDeviceToHost);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)

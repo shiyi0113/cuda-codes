@@ -4,6 +4,7 @@
 #include "sgemm_v1_shared_memory.cuh"
 #include "sgemm_v2_thread_coarsening.cuh"
 #include "sgemm_v3_using_float4.cuh"
+#include "sgemm_v4_register_outer_product.cuh"
 
 #define A(i, j) a[(i) * N + (j)]
 #define B(i, j) b[(i) * N + (j)]
@@ -123,6 +124,13 @@ int main()
     sgemm_usingFloat4(h_matrix_A, h_matrix_B, h_matrix_C_usingFloat4, M, N, K);
     check(M, N, h_matrix_C_cpu, h_matrix_C_usingFloat4);
     free(h_matrix_C_usingFloat4);
+
+    // v4_registerOuter
+    float *h_matrix_C_registerOuter = (float *)malloc(mem_size_C);
+    memset(h_matrix_C_registerOuter, 0, mem_size_C);
+    sgemm_registerOuter(h_matrix_A, h_matrix_B, h_matrix_C_registerOuter, M, N, K);
+    check(M, N, h_matrix_C_cpu, h_matrix_C_registerOuter);
+    free(h_matrix_C_registerOuter);
     /*------------------------------------------------------*/
     // free
     free(h_matrix_A);
