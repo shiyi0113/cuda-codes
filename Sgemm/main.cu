@@ -6,6 +6,7 @@
 #include "sgemm_v3_using_float4.cuh"
 #include "sgemm_v4_register_outer_product.cuh"
 #include "sgemm_v5_register_and_float4.cuh"
+#include "sgemm_v6_A_smem_transpose.cuh"
 
 #define A(i, j) a[(i) * N + (j)]
 #define B(i, j) b[(i) * N + (j)]
@@ -139,6 +140,13 @@ int main()
     sgemm_registerAndFloat4(h_matrix_A, h_matrix_B, h_matrix_C_registerAndFloat4, M, N, K);
     check(M, N, h_matrix_C_cpu, h_matrix_C_registerAndFloat4);
     free(h_matrix_C_registerAndFloat4);
+
+    // v6_transposeA
+    float *h_matrix_C_transposeA = (float *)malloc(mem_size_C);
+    memset(h_matrix_C_transposeA, 0, mem_size_C);
+    sgemm_transposeA(h_matrix_A, h_matrix_B, h_matrix_C_transposeA, M, N, K);
+    check(M, N, h_matrix_C_cpu, h_matrix_C_transposeA);
+    free(h_matrix_C_transposeA);
     /*------------------------------------------------------*/
     // free
     free(h_matrix_A);
