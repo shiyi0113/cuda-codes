@@ -17,6 +17,7 @@ __global__ void sgemm_globalMemory_kernel(float *d_A, float *d_B, float *d_C, co
     const int C_n = blockDim.y * blockIdx.y + threadIdx.y;
     d_C[C_m * N + C_n] = sum;
 }
+
 void sgemm_globalMemory(float *h_A, float *h_B, float *h_C, const int M, const int N, const int K)
 {
     const size_t mem_size_A = M * K * sizeof(float);
@@ -29,7 +30,7 @@ void sgemm_globalMemory(float *h_A, float *h_B, float *h_C, const int M, const i
     cudaMalloc((void **)&d_matrix_C, mem_size_C);
     cudaMemcpy(d_matrix_A, h_A, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(d_matrix_B, h_B, mem_size_B, cudaMemcpyHostToDevice);
-    cudaMemset(d_matrix_C,0,mem_size_C);
+    cudaMemset(d_matrix_C, 0, mem_size_C);
     const int BLOCK = 16;
     dim3 Grid((M + BLOCK - 1) / BLOCK, (N + BLOCK - 1) / BLOCK);
     dim3 Block(BLOCK, BLOCK);

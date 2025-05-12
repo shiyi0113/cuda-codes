@@ -22,7 +22,7 @@ __global__ void sgemm_sharedMemory_kernel(float *d_A, float *d_B, float *d_C, co
             sum += s_A[threadIdx.x][i] * s_B[i][threadIdx.y];
         __syncthreads();
     }
-    
+
     const int C_m = threadIdx.x + blockIdx.x * blockDim.x;
     const int C_n = threadIdx.y + blockIdx.y * blockDim.y;
     d_C[C_m * N + C_n] = sum;
@@ -40,7 +40,7 @@ void sgemm_sharedMemory(float *h_A, float *h_B, float *h_C, const int M, const i
     cudaMalloc((void **)&d_matrix_C, mem_size_C);
     cudaMemcpy(d_matrix_A, h_A, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(d_matrix_B, h_B, mem_size_B, cudaMemcpyHostToDevice);
-    cudaMemset(d_matrix_C,0,mem_size_C);
+    cudaMemset(d_matrix_C, 0, mem_size_C);
     const int BLOCK = 16;
     dim3 Grid((M + BLOCK - 1) / BLOCK, (N + BLOCK - 1) / BLOCK);
     dim3 Block(BLOCK, BLOCK);

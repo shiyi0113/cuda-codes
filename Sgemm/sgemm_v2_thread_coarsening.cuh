@@ -33,7 +33,6 @@ __global__ void sgemm_threadCoarsening_kernel(float *d_A, float *d_B, float *d_C
             {
                 int tx = threadIdx.x + i * BLOCK;
                 int ty = threadIdx.y + j * BLOCK;
-                #pragma unroll
                 for (int k = 0; k < BLOCKNUM; k++)
                 {
                     sum[i][j] += s_A[tx][k] * s_B[k][ty];
@@ -63,7 +62,7 @@ void sgemm_threadCoarsening(float *h_A, float *h_B, float *h_C, const int M, con
     cudaMalloc((void **)&d_matrix_C, mem_size_C);
     cudaMemcpy(d_matrix_A, h_A, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(d_matrix_B, h_B, mem_size_B, cudaMemcpyHostToDevice);
-    cudaMemset(d_matrix_C,0,mem_size_C);
+    cudaMemset(d_matrix_C, 0, mem_size_C);
     const int BLOCK = 16;
     const int COARSENINGFACTOR = 2;
     dim3 Grid((M + BLOCK - 1) / (BLOCK * COARSENINGFACTOR), (N + BLOCK - 1) / (BLOCK * COARSENINGFACTOR));

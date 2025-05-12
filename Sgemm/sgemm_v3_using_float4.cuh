@@ -28,8 +28,8 @@ __global__ void sgemm_usingFloat4_kernel(float *d_A, float *d_B, float *d_C, con
         s_B[tx][ty * NUM_PER_THREAD + 2] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD + 2];
         s_B[tx][ty * NUM_PER_THREAD + 3] = B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD + 3];
         */
-       FETCH_FLOAT4(s_A[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM]);
-       FETCH_FLOAT4(s_B[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD]);
+        FETCH_FLOAT4(s_A[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(A_begin[tx * K + ty * NUM_PER_THREAD + step * BLOCKNUM]);
+        FETCH_FLOAT4(s_B[tx][ty * NUM_PER_THREAD]) = FETCH_FLOAT4(B_begin[(tx + step * BLOCKNUM) * N + ty * NUM_PER_THREAD]);
         __syncthreads();
         for (int i = 0; i < NUM_PER_THREAD; i++)
         {
@@ -60,7 +60,7 @@ void sgemm_usingFloat4(float *h_A, float *h_B, float *h_C, const int M, const in
     cudaMalloc((void **)&d_matrix_C, mem_size_C);
     cudaMemcpy(d_matrix_A, h_A, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(d_matrix_B, h_B, mem_size_B, cudaMemcpyHostToDevice);
-    cudaMemset(d_matrix_C,0,mem_size_C);
+    cudaMemset(d_matrix_C, 0, mem_size_C);
     const int BLOCK = 16;
     const int COARSENINGFACTOR = 2;
     dim3 Grid((M + (BLOCK * COARSENINGFACTOR) - 1) / (BLOCK * COARSENINGFACTOR), (N + (BLOCK * COARSENINGFACTOR) - 1) / (BLOCK * COARSENINGFACTOR));
