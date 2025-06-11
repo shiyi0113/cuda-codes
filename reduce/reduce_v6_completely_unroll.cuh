@@ -1,36 +1,53 @@
+#pragma once
 #include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 #define THREAD_PER_BLOCK 256
+bool check(float *out,float *res,int n);
+__device__ void warpReduceB(volatile float* cache, unsigned int tid){
+    if (THREAD_PER_BLOCK >= 64)cache[tid]+=cache[tid+32];
+    if (THREAD_PER_BLOCK >= 32)cache[tid]+=cache[tid+16];
+    if (THREAD_PER_BLOCK >= 16)cache[tid]+=cache[tid+8];
+    if (THREAD_PER_BLOCK >= 8)cache[tid]+=cache[tid+4];
+    if (THREAD_PER_BLOCK >= 4)cache[tid]+=cache[tid+2];
+    if (THREAD_PER_BLOCK >= 2)cache[tid]+=cache[tid+1];
+}
 
 // each block proceses twice the amount of data.
-__global__ void reduce4(float *d_input,float *d_output){
+__global__ void reduce6(float *d_input,float *d_output){
     __shared__ float s_input[THREAD_PER_BLOCK];
     float* input_begin = d_input+blockIdx.x * blockDim.x * 2;
 
     s_input[threadIdx.x] = input_begin[threadIdx.x]+input_begin[threadIdx.x + blockDim.x];
     __syncthreads();
-    for(int i = blockDim.x/2;i > 0;i /= 2){
-        if(threadIdx.x < i)
-            s_input[threadIdx.x] += s_input[threadIdx.x + i];
-        __syncthreads();
+    if (THREAD_PER_BLOCK >= 512) {
+        if (threadIdx.x < 256) { 
+            s_input[threadIdx.x] += s_input[threadIdx.x + 256]; 
+        } 
+        __syncthreads(); 
     }
-
+    if (THREAD_PER_BLOCK >= 256) {
+        if (threadIdx.x < 128) { 
+            s_input[threadIdx.x] += s_input[threadIdx.x + 128]; 
+        } 
+        __syncthreads(); 
+    }
+    if (THREAD_PER_BLOCK >= 128) {
+        if (threadIdx.x < 64) { 
+            s_input[threadIdx.x] += s_input[threadIdx.x + 64]; 
+        } 
+        __syncthreads(); 
+    }
+    if (threadIdx.x < 32) warpReduceB(s_input, threadIdx.x);
     if(threadIdx.x == 0){
         d_output[blockIdx.x] = s_input[0];
     }
 }
 
-bool check(float *out,float *res,int n){
-    for(int i=0;i<n;i++){
-        if(abs(out[i]-res[i])>0.005)
-            return false;
-    }
-    return true;
-}
 
-int main(){
+
+void reduce6_completely_unroll(){
     const int N = 32*1024*1024;
     int NUM_PER_BLOCK = 2 * THREAD_PER_BLOCK;
     int block_num = N/NUM_PER_BLOCK;
@@ -65,7 +82,7 @@ int main(){
     cudaMemcpy(d_input,input,N*sizeof(float),cudaMemcpyHostToDevice);
     dim3 Grid(block_num,1);
     dim3 Block(THREAD_PER_BLOCK,1);
-    reduce4<<<Grid,Block>>>(d_input,d_output);
+    reduce6<<<Grid,Block>>>(d_input,d_output);
     cudaMemcpy(output,d_output,block_num *sizeof(float),cudaMemcpyDeviceToHost);
 
     cudaError_t err = cudaGetLastError();

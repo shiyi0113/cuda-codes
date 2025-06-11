@@ -1,9 +1,10 @@
+#pragma once
 #include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 #define THREAD_PER_BLOCK 256
-
+bool check(float *out,float *res,int n);
 __global__ void reduce2(float *d_input,float *d_output){
     __shared__ float s_input[THREAD_PER_BLOCK];
     float* input_begin = d_input+blockIdx.x*blockDim.x;
@@ -23,15 +24,7 @@ __global__ void reduce2(float *d_input,float *d_output){
     }
 }
 
-bool check(float *out,float *res,int n){
-    for(int i=0;i<n;i++){
-        if(abs(out[i]-res[i])>0.005)
-            return false;
-    }
-    return true;
-}
-
-int main(){
+void reduce2_no_rivergence_branch(){
     const int N = 32*1024*1024;
     int block_num = N/THREAD_PER_BLOCK;
 

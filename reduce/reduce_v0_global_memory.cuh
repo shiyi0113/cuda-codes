@@ -1,36 +1,29 @@
+#pragma once
 #include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 #define THREAD_PER_BLOCK 256
+bool check(float *out,float *res,int n);
 
-__global__ void reduce1(float *d_input,float *d_output){
-    __shared__ float s_input[THREAD_PER_BLOCK];
+__global__ void reduce0(float *d_input,float *d_output){
     float* input_begin = d_input+blockIdx.x*blockDim.x;
-
-    s_input[threadIdx.x] = input_begin[threadIdx.x];
-    __syncthreads();
+    
     for(int i =1;i<blockDim.x;i*=2){
         if(threadIdx.x%(i*2) == 0){
-            s_input[threadIdx.x] += s_input[threadIdx.x+i];
+            input_begin[threadIdx.x] += input_begin[threadIdx.x+i];
         }
         __syncthreads();
     }
 
     if(threadIdx.x == 0){
-        d_output[blockIdx.x] = s_input[0];
+        d_output[blockIdx.x] = input_begin[0];
     }
 }
 
-bool check(float *out,float *res,int n){
-    for(int i=0;i<n;i++){
-        if(abs(out[i]-res[i])>0.005)
-            return false;
-    }
-    return true;
-}
 
-int main(){
+
+void reduce0_naive(){
     const int N = 32*1024*1024;
     int block_num = N/THREAD_PER_BLOCK;
 
@@ -64,7 +57,7 @@ int main(){
     cudaMemcpy(d_input,input,N*sizeof(float),cudaMemcpyHostToDevice);
     dim3 Grid(N/THREAD_PER_BLOCK,1);
     dim3 Block(THREAD_PER_BLOCK,1);
-    reduce1<<<Grid,Block>>>(d_input,d_output);
+    reduce0<<<Grid,Block>>>(d_input,d_output);
     cudaMemcpy(output,d_output,(N/THREAD_PER_BLOCK) *sizeof(float),cudaMemcpyDeviceToHost);
     cudaError_t err = cudaGetLastError();
     if(err !=cudaSuccess){

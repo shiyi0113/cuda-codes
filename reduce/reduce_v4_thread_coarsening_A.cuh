@@ -1,68 +1,32 @@
+#pragma once
 #include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 #define THREAD_PER_BLOCK 256
-
-template<unsigned int BLOCKSIZE>
-__device__ void warpReduce(volatile float* cache, unsigned int tid){
-    if (BLOCKSIZE >= 64)cache[tid]+=cache[tid+32];
-    if (BLOCKSIZE >= 32)cache[tid]+=cache[tid+16];
-    if (BLOCKSIZE >= 16)cache[tid]+=cache[tid+8];
-    if (BLOCKSIZE >= 8)cache[tid]+=cache[tid+4];
-    if (BLOCKSIZE >= 4)cache[tid]+=cache[tid+2];
-    if (BLOCKSIZE >= 2)cache[tid]+=cache[tid+1];
-}
-
+bool check(float *out,float *res,int n);
 // each block proceses twice the amount of data.
-template<unsigned int BLOCKSIZE,unsigned int NUM_PER_BLOCK,unsigned int NUM_PER_THREAD>
-__global__ void reduce7(float *d_input,float *d_output){
-    __shared__ float s_input[BLOCKSIZE];
-    float* input_begin = d_input+blockIdx.x *NUM_PER_BLOCK;
-    s_input[threadIdx.x] = 0;
-    for(int i=0;i<NUM_PER_THREAD;i++){
-        s_input[threadIdx.x] += input_begin[threadIdx.x + blockDim.x * i];
-    }
+__global__ void reduce4A(float *d_input,float *d_output){
+    __shared__ float s_input[THREAD_PER_BLOCK];
+    float* input_begin = d_input+blockIdx.x * blockDim.x * 2;
+
+    s_input[threadIdx.x] = input_begin[threadIdx.x]+input_begin[threadIdx.x + blockDim.x];
     __syncthreads();
-    
-    if (BLOCKSIZE >= 512) {
-        if (threadIdx.x < 256) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 256]; 
-        } 
-        __syncthreads(); 
+    for(int i = blockDim.x/2;i > 0;i /= 2){
+        if(threadIdx.x < i)
+            s_input[threadIdx.x] += s_input[threadIdx.x + i];
+        __syncthreads();
     }
-    if (BLOCKSIZE >= 256) {
-        if (threadIdx.x < 128) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 128]; 
-        } 
-        __syncthreads(); 
-    }
-    if (BLOCKSIZE >= 128) {
-        if (threadIdx.x < 64) { 
-            s_input[threadIdx.x] += s_input[threadIdx.x + 64]; 
-        } 
-        __syncthreads(); 
-    }
-    if (threadIdx.x < 32) warpReduce<BLOCKSIZE>(s_input, threadIdx.x);
+
     if(threadIdx.x == 0){
         d_output[blockIdx.x] = s_input[0];
     }
 }
 
-bool check(float *out,float *res,int n){
-    for(int i=0;i<n;i++){
-        if(abs(out[i]-res[i])>0.005)
-            return false;
-    }
-    return true;
-}
-
-int main(){
+void reduce4A_thread_coarsening(){
     const int N = 32*1024*1024;
-    
-    const int block_num = 1024;
-    const int NUM_PER_BLOCK = N/block_num;
-    const int NUM_PER_THREAD = NUM_PER_BLOCK/THREAD_PER_BLOCK;
+    int NUM_PER_BLOCK = 2 * THREAD_PER_BLOCK;
+    int block_num = N/NUM_PER_BLOCK;
     
     // original data vector
     float *input = (float*)malloc(N*sizeof(float));
@@ -94,7 +58,7 @@ int main(){
     cudaMemcpy(d_input,input,N*sizeof(float),cudaMemcpyHostToDevice);
     dim3 Grid(block_num,1);
     dim3 Block(THREAD_PER_BLOCK,1);
-    reduce7<THREAD_PER_BLOCK,NUM_PER_BLOCK,NUM_PER_THREAD><<<Grid,Block>>>(d_input,d_output);
+    reduce4A<<<Grid,Block>>>(d_input,d_output);
     cudaMemcpy(output,d_output,block_num *sizeof(float),cudaMemcpyDeviceToHost);
 
     cudaError_t err = cudaGetLastError();

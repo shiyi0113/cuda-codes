@@ -80,9 +80,9 @@ void check(const int M, const int N, float *a, float *b)
 
 int main()
 {
-    const int M = 512;
-    const int N = 512;
-    const int K = 512;
+    const int M = 81920;
+    const int N = 256;
+    const int K = 256;
     const size_t mem_size_A = M * K * sizeof(float);
     const size_t mem_size_B = K * N * sizeof(float);
     const size_t mem_size_C = M * N * sizeof(float);
@@ -134,12 +134,12 @@ int main()
     check(M, N, h_matrix_C_cpu, h_matrix_C_registerOuter);
     free(h_matrix_C_registerOuter);
 
-    // v5_registerAndFloat4
-    float *h_matrix_C_registerAndFloat4 = (float *)malloc(mem_size_C);
-    memset(h_matrix_C_registerAndFloat4, 0, mem_size_C);
-    sgemm_registerAndFloat4(h_matrix_A, h_matrix_B, h_matrix_C_registerAndFloat4, M, N, K);
-    check(M, N, h_matrix_C_cpu, h_matrix_C_registerAndFloat4);
-    free(h_matrix_C_registerAndFloat4);
+    // // v5_registerAndFloat4
+    // float *h_matrix_C_registerAndFloat4 = (float *)malloc(mem_size_C);
+    // memset(h_matrix_C_registerAndFloat4, 0, mem_size_C);
+    // sgemm_registerAndFloat4(h_matrix_A, h_matrix_B, h_matrix_C_registerAndFloat4, M, N, K);
+    // check(M, N, h_matrix_C_cpu, h_matrix_C_registerAndFloat4);
+    // free(h_matrix_C_registerAndFloat4);
 
     // v6_transposeA
     float *h_matrix_C_transposeA = (float *)malloc(mem_size_C);
